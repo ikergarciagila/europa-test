@@ -18,21 +18,17 @@
   // -----------------------------
   // Countries datasets (by lang) - dynamic loading
   // -----------------------------
-  // Coloca tus ficheros aquí (carpeta i18n)
   const COUNTRIES_SCRIPTS = {
     es: "js/i18n/countries_es.js",
     ca: "js/i18n/countries_ca.js",
   };
 
-  // Mantendremos en memoria el dataset activo:
-  let countriesList = [];          // Array<{id,country,capital}>
-  let countriesById = new Map();   // Map<string, {id,country,capital}>
+  let countriesList = [];
+  let countriesById = new Map();
 
   function loadCountriesLang(lang) {
     window.COUNTRIES_BY_LANG = window.COUNTRIES_BY_LANG || {};
-    if (window.COUNTRIES_BY_LANG[lang]) {
-      return Promise.resolve(window.COUNTRIES_BY_LANG[lang]);
-    }
+    if (window.COUNTRIES_BY_LANG[lang]) return Promise.resolve(window.COUNTRIES_BY_LANG[lang]);
 
     return new Promise((resolve, reject) => {
       const src = COUNTRIES_SCRIPTS[lang];
@@ -78,6 +74,7 @@
   // elements
   // -----------------------------
   const screenStart = el("screenStart");
+  const screenList  = el("screenList");
   const screenGame  = el("screenGame");
   const screenEnd   = el("screenEnd");
 
@@ -86,18 +83,31 @@
   const labelNumQuestions = el("labelNumQuestions");
   const numQuestionsInput = el("numQuestions");
   const btnStart = el("btnStart");
+  const btnViewList = el("btnViewList");
   const startHint = el("startHint");
 
   const langEs = el("langEs");
   const langCa = el("langCa");
 
+  // list screen
+  const listTitle = el("listTitle");
+  const listSubtitle = el("listSubtitle");
+  const btnBackFromList = el("btnBackFromList");
+  const thListNum = el("thListNum");
+  const thListCountry = el("thListCountry");
+  const thListCapital = el("thListCapital");
+  const listBody = el("listBody");
+
+  // game screen
   const pillProgress = el("pillProgress");
   const pillScore = el("pillScore");
+  const pillTimer = el("pillTimer");
   const btnQuit = el("btnQuit");
   const questionText = el("questionText");
   const optionsGrid = el("optionsGrid");
   const feedback = el("feedback");
 
+  // end screen
   const resultsTitle = el("resultsTitle");
   const finalSummary = el("finalSummary");
   const btnPlayAgain = el("btnPlayAgain");
@@ -106,9 +116,46 @@
 
   const thNum = el("thNum");
   const thCountry = el("thCountry");
-  const thYourAnswer = el("thYourAnswer");
-  const thCorrect = el("thCorrect");
+  const thCapital = el("thCapital");
   const thStatus = el("thStatus");
+
+  // -----------------------------
+  // game settings
+  // -----------------------------
+  const QUESTION_SECONDS_DEFAULT = 5;
+
+  // timer runtime
+  let timerInterval = null;
+  let timeLeft = QUESTION_SECONDS_DEFAULT;
+
+  function stopTimer() {
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+    }
+  }
+
+  function updateTimerPill() {
+    pillTimer.textContent = T.pillTimer(timeLeft);
+  }
+
+  function startTimerForQuestion() {
+    stopTimer();
+    timeLeft = QUESTION_SECONDS_DEFAULT;
+    updateTimerPill();
+
+    timerInterval = setInterval(() => {
+      timeLeft -= 1;
+      if (timeLeft <= 0) {
+        timeLeft = 0;
+        updateTimerPill();
+        stopTimer();
+        onTimeUp();
+        return;
+      }
+      updateTimerPill();
+    }, 1000);
+  }
 
   // -----------------------------
   // game state (by IDs!)
@@ -117,6 +164,7 @@
 
   function showScreen(which) {
     screenStart.classList.add("hidden");
+    screenList.classList.add("hidden");
     screenGame.classList.add("hidden");
     screenEnd.classList.add("hidden");
     which.classList.remove("hidden");
@@ -128,7 +176,6 @@
   }
 
   function getCountryName(id) {
-    // fallback: si algo falla, muestra el id
     return countriesById.get(id)?.country ?? id;
   }
 
@@ -137,7 +184,7 @@
   }
 
   // -----------------------------
-  // Language change
+  // language change
   // -----------------------------
   async function setLang(lang) {
     if (!LANGS[lang]) return;
@@ -146,7 +193,6 @@
     T = LANGS[currentLang];
     localStorage.setItem("capitals_lang", currentLang);
 
-    // Cargar countries del nuevo idioma
     await ensureCountriesForCurrentLang();
 
     renderStaticTexts();
@@ -154,14 +200,54 @@
 
     if (game) {
       if (!screenGame.classList.contains("hidden")) {
-        // Re-render completo de la ronda actual (pero NO cambia opciones porque son ids guardados)
+        // re-render de la ronda actual: mantiene optionIds (no cambia opciones)
         renderCurrentRound(true);
-        // Nota: feedback ya mostrado se mantiene (no lo borramos si está locked)
       }
       if (!screenEnd.classList.contains("hidden")) {
         renderEndScreen();
       }
     }
+
+    if (!screenList.classList.contains("hidden")) {
+      renderListScreen();
+    }
+  }
+
+  // -----------------------------
+  // Start / list
+  // -----------------------------
+  async function openList() {
+    await ensureCountriesForCurrentLang();
+    renderListScreen();
+    showScreen(screenList);
+  }
+
+  function renderListScreen() {
+    listTitle.textContent = T.listTitle;
+    listSubtitle.textContent = T.listSubtitle;
+    btnBackFromList.textContent = T.btnBackFromList;
+
+    thListNum.textContent = T.listTable.num;
+    thListCountry.textContent = T.listTable.country;
+    thListCapital.textContent = T.listTable.capital;
+
+    listBody.innerHTML = "";
+    // Orden alfabético por país en el idioma actual
+    const sorted = countriesList.slice().sort((a, b) => a.country.localeCompare(b.country, currentLang));
+    sorted.forEach((x, i) => {
+      const tr = document.createElement("tr");
+      const tdN = document.createElement("td"); tdN.textContent = String(i + 1);
+      const tdC = document.createElement("td"); tdC.textContent = x.country;
+      const tdCap = document.createElement("td"); tdCap.textContent = x.capital;
+      tr.append(tdN, tdC, tdCap);
+      listBody.appendChild(tr);
+    });
+  }
+
+  function backToHome() {
+    stopTimer();
+    game = null;
+    showScreen(screenStart);
   }
 
   // -----------------------------
@@ -187,9 +273,9 @@
       idx: 0,
       score: 0,
       allIds,
-      roundCountryIds,                        // id del país preguntado por ronda
-      roundOptionIds: Array(roundCountryIds.length).fill(null), // ids de opciones por ronda
-      history: [], // { countryId, chosenId, isCorrect }
+      roundCountryIds,
+      roundOptionIds: Array(roundCountryIds.length).fill(null),
+      history: [], // { countryId, chosenId|null, isCorrect, timedOut }
       locked: false,
     };
 
@@ -200,24 +286,24 @@
   function renderCurrentRound(force) {
     if (!game) return;
 
-    // Si estamos bloqueados por haber respondido y no es forzado, no tocamos
-    if (game.locked && !force) return;
-
     const idx = game.idx;
     const total = game.total;
     const correctId = game.roundCountryIds[idx];
 
-    // pills + pregunta
     pillProgress.textContent = T.pillProgress(idx + 1, total);
     pillScore.textContent = T.pillScore(game.score);
+
+    // Si está locked (acabamos de responder) y solo estamos cambiando idioma, NO tocamos UI de opciones
     questionText.textContent = T.question(getCountryName(correctId));
+    if (game.locked && !force) return;
 
-    // Si estamos locked y force=true (por ejemplo cambio idioma tras responder),
-    // NO queremos borrar el estado visual de ok/bad, así que:
-    // - Si locked: solo actualizamos textos (pills + pregunta) y salimos.
-    if (game.locked) return;
+    // Si force y locked (cambio idioma tras responder), no borres feedback ni colores.
+    // Solo actualiza textos y el pill del timer (aunque esté parado). Salimos.
+    if (game.locked) {
+      updateTimerPill();
+      return;
+    }
 
-    // si no locked, podemos renderizar opciones desde cero
     feedback.textContent = "";
     feedback.className = "feedback";
     optionsGrid.innerHTML = "";
@@ -238,17 +324,13 @@
     });
 
     game.locked = false;
+
+    // arrancar temporizador para esta pregunta
+    startTimerForQuestion();
   }
 
-  function pickAnswer(chosenId) {
-    if (!game || game.locked) return;
-    game.locked = true;
-
-    const idx = game.idx;
-    const correctId = game.roundCountryIds[idx];
-    const isCorrect = chosenId === correctId;
-
-    const optionIds = game.roundOptionIds[idx];
+  function disableOptionsAndMark(correctId, chosenId) {
+    const optionIds = game.roundOptionIds[game.idx];
     const buttons = Array.from(optionsGrid.querySelectorAll("button.option"));
 
     buttons.forEach((b, i) => {
@@ -256,8 +338,21 @@
       const optionId = optionIds[i];
 
       if (optionId === correctId) b.classList.add("ok");
-      if (!isCorrect && optionId === chosenId) b.classList.add("bad");
+      if (chosenId && optionId === chosenId && chosenId !== correctId) b.classList.add("bad");
     });
+  }
+
+  function pickAnswer(chosenId) {
+    if (!game || game.locked) return;
+    game.locked = true;
+
+    stopTimer();
+
+    const idx = game.idx;
+    const correctId = game.roundCountryIds[idx];
+    const isCorrect = chosenId === correctId;
+
+    disableOptionsAndMark(correctId, chosenId);
 
     if (isCorrect) {
       game.score += 1;
@@ -268,34 +363,64 @@
       feedback.classList.add("bad");
     }
 
-    game.history.push({ countryId: correctId, chosenId, isCorrect });
+    game.history.push({ countryId: correctId, chosenId, isCorrect, timedOut: false });
 
-    setTimeout(() => {
-      game.idx += 1;
-      game.locked = false; // desbloqueamos al pasar
-      if (game.idx >= game.total) endGame();
-      else renderCurrentRound(true);
-    }, 850);
+    setTimeout(() => nextRound(), 850);
+  }
+
+  function onTimeUp() {
+    if (!game || game.locked) return;
+    game.locked = true;
+
+    const idx = game.idx;
+    const correctId = game.roundCountryIds[idx];
+
+    // no hay elección
+    const chosenId = null;
+
+    disableOptionsAndMark(correctId, chosenId);
+
+    feedback.textContent = T.feedbackTimeUp(getCapitalName(correctId));
+    feedback.classList.add("bad");
+
+    game.history.push({ countryId: correctId, chosenId, isCorrect: false, timedOut: true });
+
+    setTimeout(() => nextRound(), 850);
+  }
+
+  function nextRound() {
+    if (!game) return;
+
+    game.idx += 1;
+    game.locked = false;
+
+    if (game.idx >= game.total) endGame();
+    else renderCurrentRound(true);
   }
 
   function endGame() {
+    stopTimer();
     showScreen(screenEnd);
     renderEndScreen();
   }
 
+  // -----------------------------
+  // Results redesign (didactic)
+  // Columns: #, País, Capital(correcta), Estado (+ pequeña elegida si fallo)
+  // -----------------------------
   function renderEndScreen() {
     if (!game) return;
 
     resultsTitle.textContent = T.resultsTitle;
     finalSummary.textContent = T.finalSummary(game.score, game.total);
 
-    thNum.textContent = T.table.num;
-    thCountry.textContent = T.table.country;
-    thYourAnswer.textContent = T.table.yourAnswer;
-    thCorrect.textContent = T.table.correct;
-    thStatus.textContent = T.table.status;
+    thNum.textContent = T.resultsTable.num;
+    thCountry.textContent = T.resultsTable.country;
+    thCapital.textContent = T.resultsTable.capital;
+    thStatus.textContent = T.resultsTable.status;
 
     resultsBody.innerHTML = "";
+
     game.history.forEach((h, i) => {
       const tr = document.createElement("tr");
 
@@ -305,24 +430,25 @@
       const tdCountry = document.createElement("td");
       tdCountry.textContent = getCountryName(h.countryId);
 
-      const tdChosen = document.createElement("td");
-      tdChosen.textContent = getCapitalName(h.chosenId);
-
-      const tdCorrect = document.createElement("td");
-      tdCorrect.textContent = getCapitalName(h.countryId);
+      const tdCapital = document.createElement("td");
+      tdCapital.textContent = getCapitalName(h.countryId);
 
       const tdStatus = document.createElement("td");
-      tdStatus.textContent = h.isCorrect ? T.table.ok : T.table.fail;
-      tdStatus.className = h.isCorrect ? "tag-ok" : "tag-bad";
+      const ok = h.isCorrect;
+      tdStatus.textContent = ok ? T.resultsTable.ok : T.resultsTable.fail;
+      tdStatus.className = ok ? "tag-ok" : "tag-bad";
 
-      tr.append(tdN, tdCountry, tdChosen, tdCorrect, tdStatus);
+      if (!ok) {
+        const chosenText = h.chosenId ? getCapitalName(h.chosenId) : T.resultsTable.none;
+        const small = document.createElement("span");
+        small.className = "small-muted";
+        small.textContent = `${T.resultsTable.chosenLabel} ${chosenText}`;
+        tdStatus.appendChild(small);
+      }
+
+      tr.append(tdN, tdCountry, tdCapital, tdStatus);
       resultsBody.appendChild(tr);
     });
-  }
-
-  function quitToHome() {
-    game = null;
-    showScreen(screenStart);
   }
 
   // -----------------------------
@@ -334,6 +460,7 @@
 
     labelNumQuestions.textContent = T.labelNumQuestions;
     btnStart.textContent = T.btnStart;
+    btnViewList.textContent = T.btnViewList;
     startHint.textContent = T.startHint;
 
     btnQuit.textContent = T.btnQuit;
@@ -341,7 +468,6 @@
     btnPlayAgain.textContent = T.btnPlayAgain;
     btnBackHome.textContent = T.btnBackHome;
 
-    // opcional: título de pestaña
     document.title = T.title;
   }
 
@@ -355,9 +481,13 @@
   // Events
   // -----------------------------
   btnStart.addEventListener("click", startGame);
-  btnQuit.addEventListener("click", quitToHome);
+  btnViewList.addEventListener("click", openList);
+
+  btnBackFromList.addEventListener("click", () => showScreen(screenStart));
+
+  btnQuit.addEventListener("click", backToHome);
   btnPlayAgain.addEventListener("click", startGame);
-  btnBackHome.addEventListener("click", quitToHome);
+  btnBackHome.addEventListener("click", backToHome);
 
   langEs.addEventListener("click", () => setLang("es"));
   langCa.addEventListener("click", () => setLang("ca"));
@@ -370,11 +500,9 @@
     renderLangButtons();
     showScreen(screenStart);
 
-    // pre-carga del dataset del idioma actual para que la primera partida sea instantánea
     try {
       await ensureCountriesForCurrentLang();
     } catch (e) {
-      // Si falla, no rompemos la UI; el startGame avisará si no hay datos
       console.error(e);
     }
   })();
