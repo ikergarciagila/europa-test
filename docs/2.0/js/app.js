@@ -1,5 +1,7 @@
 (function () {
-  // --- i18n ---
+  // -----------------------------
+  // i18n texts
+  // -----------------------------
   const LANGS = {
     es: window.I18N_ES,
     ca: window.I18N_CA,
@@ -13,25 +15,53 @@
   let currentLang = getSavedLang();
   let T = LANGS[currentLang];
 
-  function setLang(lang) {
-    if (!LANGS[lang]) return;
-    currentLang = lang;
-    T = LANGS[currentLang];
-    localStorage.setItem("capitals_lang", currentLang);
-    renderStaticTexts();
-    renderLangButtons();
-    // si estamos jugando, re-render del estado actual (sin reiniciar)
-    if (game) {
-        if (!screenGame.classList.contains("hidden")) {
-            renderGameTextsOnly();   // no toca opciones ni feedback
-        }
-        if (!screenEnd.classList.contains("hidden")) {
-            renderEndScreen();       // aquí sí, porque es todo texto
-        }
+  // -----------------------------
+  // Countries datasets (by lang) - dynamic loading
+  // -----------------------------
+  // Coloca tus ficheros aquí (carpeta i18n)
+  const COUNTRIES_SCRIPTS = {
+    es: "js/i18n/countries_es.js",
+    ca: "js/i18n/countries_ca.js",
+  };
+
+  // Mantendremos en memoria el dataset activo:
+  let countriesList = [];          // Array<{id,country,capital}>
+  let countriesById = new Map();   // Map<string, {id,country,capital}>
+
+  function loadCountriesLang(lang) {
+    window.COUNTRIES_BY_LANG = window.COUNTRIES_BY_LANG || {};
+    if (window.COUNTRIES_BY_LANG[lang]) {
+      return Promise.resolve(window.COUNTRIES_BY_LANG[lang]);
     }
+
+    return new Promise((resolve, reject) => {
+      const src = COUNTRIES_SCRIPTS[lang];
+      if (!src) return reject(new Error("No countries script for lang: " + lang));
+
+      const s = document.createElement("script");
+      s.src = src;
+      s.async = true;
+      s.onload = () => resolve(window.COUNTRIES_BY_LANG[lang]);
+      s.onerror = () => reject(new Error("Failed loading " + src));
+      document.head.appendChild(s);
+    });
   }
 
-  // --- helpers ---
+  function toIndexById(list) {
+    const m = new Map();
+    for (const item of list) m.set(item.id, item);
+    return m;
+  }
+
+  async function ensureCountriesForCurrentLang() {
+    const list = await loadCountriesLang(currentLang);
+    countriesList = list || [];
+    countriesById = toIndexById(countriesList);
+  }
+
+  // -----------------------------
+  // helpers
+  // -----------------------------
   function shuffle(arr) {
     const a = arr.slice();
     for (let i = a.length - 1; i > 0; i--) {
@@ -44,7 +74,9 @@
   function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
   const el = (id) => document.getElementById(id);
 
-  // --- elements ---
+  // -----------------------------
+  // elements
+  // -----------------------------
   const screenStart = el("screenStart");
   const screenGame  = el("screenGame");
   const screenEnd   = el("screenEnd");
@@ -78,7 +110,9 @@
   const thCorrect = el("thCorrect");
   const thStatus = el("thStatus");
 
-  // --- game state ---
+  // -----------------------------
+  // game state (by IDs!)
+  // -----------------------------
   let game = null;
 
   function showScreen(which) {
@@ -88,14 +122,55 @@
     which.classList.remove("hidden");
   }
 
-  function buildRoundOptions(correctCapital, allCapitals) {
-    const distractors = sample(allCapitals.filter(c => c !== correctCapital), 3);
-    return shuffle([correctCapital, ...distractors]);
+  function buildRoundOptionIds(correctId, allIds) {
+    const distractors = sample(allIds.filter(id => id !== correctId), 3);
+    return shuffle([correctId, ...distractors]);
   }
 
-  function startGame() {
-    const COUNTRIES = window.COUNTRIES || [];
-    if (COUNTRIES.length < 4) {
+  function getCountryName(id) {
+    // fallback: si algo falla, muestra el id
+    return countriesById.get(id)?.country ?? id;
+  }
+
+  function getCapitalName(id) {
+    return countriesById.get(id)?.capital ?? id;
+  }
+
+  // -----------------------------
+  // Language change
+  // -----------------------------
+  async function setLang(lang) {
+    if (!LANGS[lang]) return;
+
+    currentLang = lang;
+    T = LANGS[currentLang];
+    localStorage.setItem("capitals_lang", currentLang);
+
+    // Cargar countries del nuevo idioma
+    await ensureCountriesForCurrentLang();
+
+    renderStaticTexts();
+    renderLangButtons();
+
+    if (game) {
+      if (!screenGame.classList.contains("hidden")) {
+        // Re-render completo de la ronda actual (pero NO cambia opciones porque son ids guardados)
+        renderCurrentRound(true);
+        // Nota: feedback ya mostrado se mantiene (no lo borramos si está locked)
+      }
+      if (!screenEnd.classList.contains("hidden")) {
+        renderEndScreen();
+      }
+    }
+  }
+
+  // -----------------------------
+  // Game lifecycle
+  // -----------------------------
+  async function startGame() {
+    await ensureCountriesForCurrentLang();
+
+    if (countriesList.length < 4) {
       alert(T.alertNeedMoreCountries);
       return;
     }
@@ -104,18 +179,18 @@
     const N = clamp(requested, 5, 50);
     numQuestionsInput.value = N;
 
-    const rounds = sample(COUNTRIES, Math.min(N, COUNTRIES.length));
-    const allCapitals = COUNTRIES.map(x => x.capital);
+    const allIds = countriesList.map(x => x.id);
+    const roundCountryIds = sample(allIds, Math.min(N, allIds.length));
 
     game = {
-      total: rounds.length,
+      total: roundCountryIds.length,
       idx: 0,
       score: 0,
-      rounds,
-      allCapitals,
-      history: [], // {country, correct, chosen, isCorrect}
+      allIds,
+      roundCountryIds,                        // id del país preguntado por ronda
+      roundOptionIds: Array(roundCountryIds.length).fill(null), // ids de opciones por ronda
+      history: [], // { countryId, chosenId, isCorrect }
       locked: false,
-      roundOptions: Array(rounds.length).fill(null)
     };
 
     showScreen(screenGame);
@@ -125,76 +200,82 @@
   function renderCurrentRound(force) {
     if (!game) return;
 
-    // si estamos en feedback (locked) y no forzamos, no tocamos botones
+    // Si estamos bloqueados por haber respondido y no es forzado, no tocamos
     if (game.locked && !force) return;
 
+    const idx = game.idx;
+    const total = game.total;
+    const correctId = game.roundCountryIds[idx];
+
+    // pills + pregunta
+    pillProgress.textContent = T.pillProgress(idx + 1, total);
+    pillScore.textContent = T.pillScore(game.score);
+    questionText.textContent = T.question(getCountryName(correctId));
+
+    // Si estamos locked y force=true (por ejemplo cambio idioma tras responder),
+    // NO queremos borrar el estado visual de ok/bad, así que:
+    // - Si locked: solo actualizamos textos (pills + pregunta) y salimos.
+    if (game.locked) return;
+
+    // si no locked, podemos renderizar opciones desde cero
     feedback.textContent = "";
     feedback.className = "feedback";
     optionsGrid.innerHTML = "";
 
-    const { idx, total, rounds, score, allCapitals } = game;
-    const current = rounds[idx];
-
-    pillProgress.textContent = T.pillProgress(idx + 1, total);
-    pillScore.textContent = T.pillScore(score);
-    questionText.textContent = T.question(current.country);
-
-    let options = game.roundOptions[idx];
-    if (!options) {
-        options = buildRoundOptions(current.capital, allCapitals);
-        game.roundOptions[idx] = options; // 👈 guardamos las opciones de ESTA pregunta
+    let optionIds = game.roundOptionIds[idx];
+    if (!optionIds) {
+      optionIds = buildRoundOptionIds(correctId, game.allIds);
+      game.roundOptionIds[idx] = optionIds;
     }
 
-    options.forEach(cap => {
-        const btn = document.createElement("button");
-        btn.className = "option";
-        btn.type = "button";
-        btn.textContent = cap;
-        btn.addEventListener("click", () => pickAnswer(cap));
-        optionsGrid.appendChild(btn);
+    optionIds.forEach((optionId) => {
+      const btn = document.createElement("button");
+      btn.className = "option";
+      btn.type = "button";
+      btn.textContent = getCapitalName(optionId);
+      btn.addEventListener("click", () => pickAnswer(optionId));
+      optionsGrid.appendChild(btn);
     });
 
     game.locked = false;
   }
 
-  function pickAnswer(chosen) {
+  function pickAnswer(chosenId) {
     if (!game || game.locked) return;
     game.locked = true;
 
-    const current = game.rounds[game.idx];
-    const correct = current.capital;
-    const isCorrect = chosen === correct;
+    const idx = game.idx;
+    const correctId = game.roundCountryIds[idx];
+    const isCorrect = chosenId === correctId;
 
+    const optionIds = game.roundOptionIds[idx];
     const buttons = Array.from(optionsGrid.querySelectorAll("button.option"));
-    for (const b of buttons) {
-      const cap = b.textContent;
-      b.disabled = true;
 
-      if (cap === correct) b.classList.add("ok");
-      if (!isCorrect && cap === chosen) b.classList.add("bad");
-    }
+    buttons.forEach((b, i) => {
+      b.disabled = true;
+      const optionId = optionIds[i];
+
+      if (optionId === correctId) b.classList.add("ok");
+      if (!isCorrect && optionId === chosenId) b.classList.add("bad");
+    });
 
     if (isCorrect) {
       game.score += 1;
       feedback.textContent = T.feedbackOk;
       feedback.classList.add("ok");
     } else {
-      feedback.textContent = T.feedbackBad(correct);
+      feedback.textContent = T.feedbackBad(getCapitalName(correctId));
       feedback.classList.add("bad");
     }
 
-    game.history.push({
-      country: current.country,
-      correct,
-      chosen,
-      isCorrect
-    });
+    game.history.push({ countryId: correctId, chosenId, isCorrect });
 
     setTimeout(() => {
       game.idx += 1;
+      game.locked = false; // desbloqueamos al pasar
       if (game.idx >= game.total) endGame();
       else renderCurrentRound(true);
-    }, 1500);
+    }, 850);
   }
 
   function endGame() {
@@ -208,7 +289,6 @@
     resultsTitle.textContent = T.resultsTitle;
     finalSummary.textContent = T.finalSummary(game.score, game.total);
 
-    // headers tabla
     thNum.textContent = T.table.num;
     thCountry.textContent = T.table.country;
     thYourAnswer.textContent = T.table.yourAnswer;
@@ -223,13 +303,13 @@
       tdN.textContent = String(i + 1);
 
       const tdCountry = document.createElement("td");
-      tdCountry.textContent = h.country;
+      tdCountry.textContent = getCountryName(h.countryId);
 
       const tdChosen = document.createElement("td");
-      tdChosen.textContent = h.chosen;
+      tdChosen.textContent = getCapitalName(h.chosenId);
 
       const tdCorrect = document.createElement("td");
-      tdCorrect.textContent = h.correct;
+      tdCorrect.textContent = getCapitalName(h.countryId);
 
       const tdStatus = document.createElement("td");
       tdStatus.textContent = h.isCorrect ? T.table.ok : T.table.fail;
@@ -240,27 +320,14 @@
     });
   }
 
-
-  function renderGameTextsOnly() {
-  if (!game) return;
-
-  const { idx, total, rounds, score } = game;
-  const current = rounds[idx];
-
-  pillProgress.textContent = T.pillProgress(idx + 1, total);
-  pillScore.textContent = T.pillScore(score);
-  questionText.textContent = T.question(current.country);
-
-  // NO tocamos optionsGrid
-  // NO tocamos feedback (si ya había "Correcto/Incorrecto", se queda igual)
-}
-
   function quitToHome() {
     game = null;
     showScreen(screenStart);
   }
 
-  // --- static texts (no dependen del progreso) ---
+  // -----------------------------
+  // Static texts (UI)
+  // -----------------------------
   function renderStaticTexts() {
     title.textContent = T.title;
     subtitle.textContent = T.subtitle;
@@ -273,16 +340,20 @@
 
     btnPlayAgain.textContent = T.btnPlayAgain;
     btnBackHome.textContent = T.btnBackHome;
+
+    // opcional: título de pestaña
+    document.title = T.title;
   }
 
   function renderLangButtons() {
     langEs.classList.toggle("active", currentLang === "es");
     langCa.classList.toggle("active", currentLang === "ca");
-    // para accesibilidad/semántica:
     document.documentElement.lang = currentLang;
   }
 
-  // --- events ---
+  // -----------------------------
+  // Events
+  // -----------------------------
   btnStart.addEventListener("click", startGame);
   btnQuit.addEventListener("click", quitToHome);
   btnPlayAgain.addEventListener("click", startGame);
@@ -291,8 +362,20 @@
   langEs.addEventListener("click", () => setLang("es"));
   langCa.addEventListener("click", () => setLang("ca"));
 
-  // --- init ---
-  renderStaticTexts();
-  renderLangButtons();
-  showScreen(screenStart);
+  // -----------------------------
+  // Init
+  // -----------------------------
+  (async function init() {
+    renderStaticTexts();
+    renderLangButtons();
+    showScreen(screenStart);
+
+    // pre-carga del dataset del idioma actual para que la primera partida sea instantánea
+    try {
+      await ensureCountriesForCurrentLang();
+    } catch (e) {
+      // Si falla, no rompemos la UI; el startGame avisará si no hay datos
+      console.error(e);
+    }
+  })();
 })();
