@@ -22,11 +22,12 @@
     renderLangButtons();
     // si estamos jugando, re-render del estado actual (sin reiniciar)
     if (game) {
-      renderCurrentRound(true);
-      // si ya estamos en pantalla final:
-      if (!screenEnd.classList.contains("hidden")) {
-        renderEndScreen();
-      }
+        if (!screenGame.classList.contains("hidden")) {
+            renderGameTextsOnly();   // no toca opciones ni feedback
+        }
+        if (!screenEnd.classList.contains("hidden")) {
+            renderEndScreen();       // aquí sí, porque es todo texto
+        }
     }
   }
 
@@ -113,7 +114,8 @@
       rounds,
       allCapitals,
       history: [], // {country, correct, chosen, isCorrect}
-      locked: false
+      locked: false,
+      roundOptions: Array(rounds.length).fill(null)
     };
 
     showScreen(screenGame);
@@ -137,15 +139,19 @@
     pillScore.textContent = T.pillScore(score);
     questionText.textContent = T.question(current.country);
 
-    const options = buildRoundOptions(current.capital, allCapitals);
+    let options = game.roundOptions[idx];
+    if (!options) {
+        options = buildRoundOptions(current.capital, allCapitals);
+        game.roundOptions[idx] = options; // 👈 guardamos las opciones de ESTA pregunta
+    }
 
     options.forEach(cap => {
-      const btn = document.createElement("button");
-      btn.className = "option";
-      btn.type = "button";
-      btn.textContent = cap;
-      btn.addEventListener("click", () => pickAnswer(cap));
-      optionsGrid.appendChild(btn);
+        const btn = document.createElement("button");
+        btn.className = "option";
+        btn.type = "button";
+        btn.textContent = cap;
+        btn.addEventListener("click", () => pickAnswer(cap));
+        optionsGrid.appendChild(btn);
     });
 
     game.locked = false;
@@ -233,6 +239,21 @@
       resultsBody.appendChild(tr);
     });
   }
+
+
+  function renderGameTextsOnly() {
+  if (!game) return;
+
+  const { idx, total, rounds, score } = game;
+  const current = rounds[idx];
+
+  pillProgress.textContent = T.pillProgress(idx + 1, total);
+  pillScore.textContent = T.pillScore(score);
+  questionText.textContent = T.question(current.country);
+
+  // NO tocamos optionsGrid
+  // NO tocamos feedback (si ya había "Correcto/Incorrecto", se queda igual)
+}
 
   function quitToHome() {
     game = null;
