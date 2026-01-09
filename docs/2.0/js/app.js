@@ -188,7 +188,7 @@
       game.idx += 1;
       if (game.idx >= game.total) endGame();
       else renderCurrentRound(true);
-    }, 850);
+    }, 1500);
   }
 
   function endGame() {
