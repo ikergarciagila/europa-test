@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Juego Capitales de Europa</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --card: #121a33;
+      --text: #e8ecff;
+      --muted: #aab2d5;
+      --ok: #1fda7a;
+      --bad: #ff4d4d;
+      --btn: #2a3cff;
+      --btn2: #232b4d;
+      --border: rgba(255,255,255,.10);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial;
+      background: radial-gradient(1200px 800px at 20% 0%, #16245a, var(--bg));
+      color: var(--text);
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    .app {
+      width: min(920px, 100%);
+      display: grid;
+      gap: 16px;
+    }
+    .card {
+      background: rgba(18, 26, 51, .92);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: 0 18px 60px rgba(0,0,0,.35);
+      backdrop-filter: blur(8px);
+    }
+    h1 { margin: 0 0 6px; font-size: 24px; }
+    .muted { color: var(--muted); }
+    .row { display:flex; gap:12px; align-items:center; flex-wrap: wrap; }
+    label { font-weight: 600; }
+    input[type="number"]{
+      width: 110px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,.15);
+      color: var(--text);
+      outline: none;
+    }
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 14px;
+      color: white;
+      cursor: pointer;
+      font-weight: 700;
+      letter-spacing: .2px;
+    }
+    .primary { background: var(--btn); }
+    .secondary { background: var(--btn2); border: 1px solid var(--border); }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    .gameTop {
+      display:flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .pill {
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      background: rgba(0,0,0,.12);
+      font-weight: 650;
+      font-size: 13px;
+    }
+    .question {
+      margin-top: 12px;
+      font-size: 20px;
+      font-weight: 800;
+    }
+    .grid {
+      margin-top: 14px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    @media (max-width: 640px){
+      .grid{ grid-template-columns: 1fr; }
+    }
+    .option {
+      text-align: left;
+      width: 100%;
+      background: rgba(0,0,0,.12);
+      border: 1px solid var(--border);
+      padding: 14px 14px;
+      border-radius: 16px;
+      transition: transform .05s ease, border-color .15s ease;
+    }
+    .option:hover { transform: translateY(-1px); border-color: rgba(255,255,255,.22); }
+    .option.ok { border-color: rgba(31,218,122,.85); background: rgba(31,218,122,.15); }
+    .option.bad { border-color: rgba(255,77,77,.90); background: rgba(255,77,77,.14); }
+    .feedback { margin-top: 12px; font-weight: 700; min-height: 22px; }
+    .feedback.ok { color: var(--ok); }
+    .feedback.bad { color: var(--bad); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+    }
+    th, td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+    th { color: var(--muted); font-size: 13px; }
+    tr:last-child td { border-bottom: 0; }
+    .tag-ok { color: var(--ok); font-weight: 800; }
+    .tag-bad { color: var(--bad); font-weight: 800; }
+
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="card">
+      <h1>Juego: Capitales de Europa</h1>
+      <div class="muted">Elige cuántas preguntas quieres y pulsa <b>Empezar</b>.</div>
+    </div>
+
+    <!-- Pantalla de inicio -->
+    <div id="screenStart" class="card">
+      <div class="row">
+        <label for="numQuestions">Número de preguntas:</label>
+        <input id="numQuestions" type="number" min="5" max="50" value="10" />
+        <button id="btnStart" class="primary">Empezar</button>
+      </div>
+      <div class="muted" style="margin-top:10px;">
+        (De momento, esto es suficiente como “menú”. Más adelante metemos modos de juego.)
+      </div>
+    </div>
+
+    <!-- Pantalla de juego -->
+    <div id="screenGame" class="card hidden">
+      <div class="gameTop">
+        <div class="row">
+          <span id="pillProgress" class="pill">Pregunta 1/10</span>
+          <span id="pillScore" class="pill">Aciertos: 0</span>
+        </div>
+        <button id="btnQuit" class="secondary">Salir</button>
+      </div>
+
+      <div id="questionText" class="question"></div>
+
+      <div id="optionsGrid" class="grid"></div>
+
+      <div id="feedback" class="feedback"></div>
+    </div>
+
+    <!-- Pantalla final -->
+    <div id="screenEnd" class="card hidden">
+      <div class="gameTop">
+        <div>
+          <div style="font-size:20px;font-weight:900;">Resultados</div>
+          <div id="finalSummary" class="muted"></div>
+        </div>
+        <div class="row">
+          <button id="btnPlayAgain" class="primary">Jugar otra vez</button>
+          <button id="btnBackHome" class="secondary">Volver al inicio</button>
+        </div>
+      </div>
+
+      <div style="margin-top:14px;">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>País</th>
+              <th>Tu respuesta</th>
+              <th>Correcta</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+<script>
+/**
+ * 1) PEGA AQUÍ TU LISTA REAL
+ * Formato: { country: "España", capital: "Madrid" }
+ */
+const COUNTRIES = [
+  { country: "España", capital: "Madrid" },
+  { country: "Francia", capital: "París" },
+  { country: "Italia", capital: "Roma" },
+  { country: "Portugal", capital: "Lisboa" },
+  { country: "Alemania", capital: "Berlín" },
+  { country: "Países Bajos", capital: "Ámsterdam" },
+  { country: "Bélgica", capital: "Bruselas" },
+  { country: "Irlanda", capital: "Dublín" },
+  { country: "Suecia", capital: "Estocolmo" },
+  { country: "Noruega", capital: "Oslo" },
+  { country: "Finlandia", capital: "Helsinki" },
+  { country: "Austria", capital: "Viena" },
+];
+
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function sample(arr, n) {
+  return shuffle(arr).slice(0, n);
+}
+
+function clamp(n, min, max) {
+  return Math.max(min, Math.min(max, n));
+}
+
+const el = (id) => document.getElementById(id);
+
+const screenStart = el("screenStart");
+const screenGame  = el("screenGame");
+const screenEnd   = el("screenEnd");
+
+const numQuestionsInput = el("numQuestions");
+const btnStart = el("btnStart");
+const btnQuit = el("btnQuit");
+
+const pillProgress = el("pillProgress");
+const pillScore = el("pillScore");
+const questionText = el("questionText");
+const optionsGrid = el("optionsGrid");
+const feedback = el("feedback");
+
+const finalSummary = el("finalSummary");
+const resultsBody = el("resultsBody");
+const btnPlayAgain = el("btnPlayAgain");
+const btnBackHome = el("btnBackHome");
+
+let game = null;
+
+function showScreen(which) {
+  screenStart.classList.add("hidden");
+  screenGame.classList.add("hidden");
+  screenEnd.classList.add("hidden");
+  which.classList.remove("hidden");
+}
+
+function buildRoundOptions(correctCapital, allCapitals) {
+  // 3 distractores que NO sean la correcta
+  const distractors = sample(allCapitals.filter(c => c !== correctCapital), 3);
+  return shuffle([correctCapital, ...distractors]);
+}
+
+function startGame() {
+  if (COUNTRIES.length < 4) {
+    alert("Necesitas al menos 4 países/capitales en la lista.");
+    return;
+  }
+
+  const requested = Number(numQuestionsInput.value || 10);
+  const N = clamp(requested, 5, 50);
+  numQuestionsInput.value = N;
+
+  const rounds = sample(COUNTRIES, Math.min(N, COUNTRIES.length));
+  const allCapitals = COUNTRIES.map(x => x.capital);
+
+  game = {
+    total: rounds.length,
+    idx: 0,
+    score: 0,
+    rounds,
+    allCapitals,
+    history: [], // {country, correct, chosen, isCorrect}
+    locked: false
+  };
+
+  showScreen(screenGame);
+  renderCurrentRound();
+}
+
+function renderCurrentRound() {
+  feedback.textContent = "";
+  feedback.className = "feedback";
+
+  optionsGrid.innerHTML = "";
+
+  const { idx, total, rounds, score, allCapitals } = game;
+  const current = rounds[idx];
+
+  pillProgress.textContent = `Pregunta ${idx + 1}/${total}`;
+  pillScore.textContent = `Aciertos: ${score}`;
+
+  questionText.textContent = `¿Cuál es la capital de ${current.country}?`;
+
+  const options = buildRoundOptions(current.capital, allCapitals);
+
+  options.forEach(cap => {
+    const btn = document.createElement("button");
+    btn.className = "option";
+    btn.type = "button";
+    btn.textContent = cap;
+    btn.addEventListener("click", () => pickAnswer(cap));
+    optionsGrid.appendChild(btn);
+  });
+
+  game.locked = false;
+}
+
+function pickAnswer(chosen) {
+  if (!game || game.locked) return;
+  game.locked = true;
+
+  const current = game.rounds[game.idx];
+  const correct = current.capital;
+  const isCorrect = chosen === correct;
+
+  // pintar botones
+  const buttons = Array.from(optionsGrid.querySelectorAll("button.option"));
+  for (const b of buttons) {
+    const cap = b.textContent;
+    b.disabled = true;
+
+    if (cap === correct) b.classList.add("ok");
+    if (!isCorrect && cap === chosen) b.classList.add("bad");
+  }
+
+  if (isCorrect) {
+    game.score += 1;
+    feedback.textContent = "✅ ¡Correcto!";
+    feedback.classList.add("ok");
+  } else {
+    feedback.textContent = `❌ Incorrecto. La correcta es: ${correct}`;
+    feedback.classList.add("bad");
+  }
+
+  game.history.push({
+    country: current.country,
+    correct,
+    chosen,
+    isCorrect
+  });
+
+  // pasar a la siguiente pregunta tras un pequeño delay
+  setTimeout(() => {
+    game.idx += 1;
+    if (game.idx >= game.total) endGame();
+    else renderCurrentRound();
+  }, 3000;
+}
+
+function endGame() {
+  showScreen(screenEnd);
+
+  const { score, total, history } = game;
+  finalSummary.textContent = `Has acertado ${score} de ${total}.`;
+
+  resultsBody.innerHTML = "";
+  history.forEach((h, i) => {
+    const tr = document.createElement("tr");
+
+    const tdN = document.createElement("td");
+    tdN.textContent = String(i + 1);
+
+    const tdCountry = document.createElement("td");
+    tdCountry.textContent = h.country;
+
+    const tdChosen = document.createElement("td");
+    tdChosen.textContent = h.chosen;
+
+    const tdCorrect = document.createElement("td");
+    tdCorrect.textContent = h.correct;
+
+    const tdStatus = document.createElement("td");
+    tdStatus.textContent = h.isCorrect ? "OK" : "FALLO";
+    tdStatus.className = h.isCorrect ? "tag-ok" : "tag-bad";
+
+    tr.append(tdN, tdCountry, tdChosen, tdCorrect, tdStatus);
+    resultsBody.appendChild(tr);
+  });
+}
+
+function quitToHome() {
+  game = null;
+  showScreen(screenStart);
+}
+
+btnStart.addEventListener("click", startGame);
+btnQuit.addEventListener("click", quitToHome);
+
+btnPlayAgain.addEventListener("click", () => {
+  // mantiene el N seleccionado
+  startGame();
+});
+
+btnBackHome.addEventListener("click", quitToHome);
+
+// Mostrar inicio por defecto
+showScreen(screenStart);
+</script>
+</body>
+</html>
