@@ -1,5 +1,11 @@
 (function () {
   // -----------------------------
+  // Global config
+  // -----------------------------
+  const sleepTimeAfterAnswerOK = 1500;
+  const sleepTimeAfterAnswerKO = 3000;
+  
+  // -----------------------------
   // i18n texts
   // -----------------------------
   const LANGS = {
@@ -400,6 +406,8 @@
 
     disableOptionsAndMark(correctId, chosenId);
 
+    const sleepTime = sleepTimeAfterAnswerOK;
+
     if (isCorrect) {
       game.score += 1;
       feedback.textContent = T.feedbackOk;
@@ -407,11 +415,12 @@
     } else {
       feedback.textContent = T.feedbackBad(getCapitalName(correctId));
       feedback.classList.add("bad");
+      sleepTime = sleepTimeAfterAnswerKO;
     }
 
     game.history.push({ countryId: correctId, chosenId, isCorrect, timedOut: false });
 
-    setTimeout(() => nextRound(), 850);
+    setTimeout(() => nextRound(), sleepTime);
   }
 
   function onTimeUp() {
@@ -428,7 +437,7 @@
 
     game.history.push({ countryId: correctId, chosenId, isCorrect: false, timedOut: true });
 
-    setTimeout(() => nextRound(), 850);
+    setTimeout(() => nextRound(), sleepTimeAfterAnswerKO);
   }
 
   function nextRound() {
