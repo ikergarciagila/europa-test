@@ -406,7 +406,7 @@
 
     disableOptionsAndMark(correctId, chosenId);
 
-    const sleepTime = sleepTimeAfterAnswerOK;
+    sleepTime = sleepTimeAfterAnswerOK;
 
     if (isCorrect) {
       game.score += 1;
