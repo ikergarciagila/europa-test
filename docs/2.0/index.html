@@ -59,7 +59,12 @@
         <div class="row">
           <span id="pillProgress" class="pill"></span>
           <span id="pillScore" class="pill"></span>
-          <span id="pillTimer" class="pill"></span>
+          <div class="timerWrap" aria-label="Temporizador">
+            <div class="timerBar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+              <div id="timerFill" class="timerFill"></div>
+            </div>
+            <div id="timerText" class="timerText"></div>
+          </div>
         </div>
         <button id="btnQuit" class="secondary" type="button"></button>
       </div>

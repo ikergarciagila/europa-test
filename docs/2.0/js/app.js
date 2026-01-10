@@ -101,7 +101,11 @@
   // game screen
   const pillProgress = el("pillProgress");
   const pillScore = el("pillScore");
-  const pillTimer = el("pillTimer");
+
+  // NEW timer elements (bar)
+  const timerFill = el("timerFill");
+  const timerText = el("timerText");
+
   const btnQuit = el("btnQuit");
   const questionText = el("questionText");
   const optionsGrid = el("optionsGrid");
@@ -124,9 +128,10 @@
   // -----------------------------
   const QUESTION_SECONDS_DEFAULT = 5;
 
-  // timer runtime
+  // timer runtime (continuous)
   let timerInterval = null;
-  let timeLeft = QUESTION_SECONDS_DEFAULT;
+  let timerTotalMs = QUESTION_SECONDS_DEFAULT * 1000;
+  let timerEndTs = 0; // timestamp when the timer ends
 
   function stopTimer() {
     if (timerInterval) {
@@ -135,26 +140,45 @@
     }
   }
 
-  function updateTimerPill() {
-    pillTimer.textContent = T.pillTimer(timeLeft);
+  function remainingMs() {
+    return Math.max(0, timerEndTs - Date.now());
+  }
+
+  function renderTimer() {
+    // Si no hay timer activo (por ejemplo en pantalla inicio/resultados), no rompemos nada
+    if (!timerFill || !timerText) return;
+
+    const rem = remainingMs();
+    const ratio = timerTotalMs > 0 ? rem / timerTotalMs : 0;
+    const pct = Math.max(0, Math.min(100, Math.round(ratio * 100)));
+
+    timerFill.style.width = pct + "%";
+
+    // accesibilidad progressbar
+    const bar = timerFill.parentElement;
+    if (bar) bar.setAttribute("aria-valuenow", String(pct));
+
+    // texto en segundos (ceil para que se vea natural)
+    const secs = Math.ceil(rem / 1000);
+    timerText.textContent = T.pillTimer(secs);
   }
 
   function startTimerForQuestion() {
     stopTimer();
-    timeLeft = QUESTION_SECONDS_DEFAULT;
-    updateTimerPill();
+
+    timerTotalMs = QUESTION_SECONDS_DEFAULT * 1000;
+    timerEndTs = Date.now() + timerTotalMs;
+
+    renderTimer();
 
     timerInterval = setInterval(() => {
-      timeLeft -= 1;
-      if (timeLeft <= 0) {
-        timeLeft = 0;
-        updateTimerPill();
+      const rem = remainingMs();
+      renderTimer();
+      if (rem <= 0) {
         stopTimer();
         onTimeUp();
-        return;
       }
-      updateTimerPill();
-    }, 1000);
+    }, 50);
   }
 
   // -----------------------------
@@ -200,8 +224,9 @@
 
     if (game) {
       if (!screenGame.classList.contains("hidden")) {
-        // re-render de la ronda actual: mantiene optionIds (no cambia opciones)
-        renderCurrentRound(true);
+        // NO renderCurrentRound aquí, para no reiniciar el timer
+        renderGameTextsAndOptionsOnly();
+        renderTimer(); // solo repinta el texto del timer en el nuevo idioma
       }
       if (!screenEnd.classList.contains("hidden")) {
         renderEndScreen();
@@ -211,6 +236,29 @@
     if (!screenList.classList.contains("hidden")) {
       renderListScreen();
     }
+  }
+
+  function renderGameTextsAndOptionsOnly() {
+    if (!game) return;
+
+    const idx = game.idx;
+    const total = game.total;
+    const correctId = game.roundCountryIds[idx];
+
+    pillProgress.textContent = T.pillProgress(idx + 1, total);
+    pillScore.textContent = T.pillScore(game.score);
+    questionText.textContent = T.question(getCountryName(correctId));
+
+    // Actualiza el texto de los botones sin regenerar opciones
+    const optionIds = game.roundOptionIds[idx];
+    if (optionIds && optionIds.length) {
+      const buttons = Array.from(optionsGrid.querySelectorAll("button.option"));
+      buttons.forEach((btn, i) => {
+        const optId = optionIds[i];
+        if (optId) btn.textContent = getCapitalName(optId);
+      });
+    }
+    // feedback se mantiene tal cual (si acababas de contestar, se queda)
   }
 
   // -----------------------------
@@ -232,7 +280,6 @@
     thListCapital.textContent = T.listTable.capital;
 
     listBody.innerHTML = "";
-    // Orden alfabético por país en el idioma actual
     const sorted = countriesList.slice().sort((a, b) => a.country.localeCompare(b.country, currentLang));
     sorted.forEach((x, i) => {
       const tr = document.createElement("tr");
@@ -292,15 +339,15 @@
 
     pillProgress.textContent = T.pillProgress(idx + 1, total);
     pillScore.textContent = T.pillScore(game.score);
-
-    // Si está locked (acabamos de responder) y solo estamos cambiando idioma, NO tocamos UI de opciones
     questionText.textContent = T.question(getCountryName(correctId));
+
+    // Si está locked y NO forzamos, no tocamos
     if (game.locked && !force) return;
 
-    // Si force y locked (cambio idioma tras responder), no borres feedback ni colores.
-    // Solo actualiza textos y el pill del timer (aunque esté parado). Salimos.
+    // Si está locked (acabamos de responder) y force (por ejemplo por otros motivos),
+    // no desmontamos nada ni tocamos el timer
     if (game.locked) {
-      updateTimerPill();
+      renderTimer();
       return;
     }
 
@@ -325,7 +372,7 @@
 
     game.locked = false;
 
-    // arrancar temporizador para esta pregunta
+    // arrancar temporizador SOLO al iniciar una nueva pregunta
     startTimerForQuestion();
   }
 
@@ -348,8 +395,7 @@
 
     stopTimer();
 
-    const idx = game.idx;
-    const correctId = game.roundCountryIds[idx];
+    const correctId = game.roundCountryIds[game.idx];
     const isCorrect = chosenId === correctId;
 
     disableOptionsAndMark(correctId, chosenId);
@@ -372,10 +418,7 @@
     if (!game || game.locked) return;
     game.locked = true;
 
-    const idx = game.idx;
-    const correctId = game.roundCountryIds[idx];
-
-    // no hay elección
+    const correctId = game.roundCountryIds[game.idx];
     const chosenId = null;
 
     disableOptionsAndMark(correctId, chosenId);
