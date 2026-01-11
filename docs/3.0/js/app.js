@@ -187,25 +187,15 @@
 function renderTimer() {
   if (!timerWrap || !timerFill || !timerText) return;
 
-  // Ocultar si no estamos jugando o no estamos en la pantalla del juego
-  if (!game || screenGame.classList.contains("hidden")) {
-    timerWrap.classList.add("hidden");
-    return;
-  }
-
-  // Sin tiempo => oculto
-  if (timeSecondsCurrent <= 0) {
-    timerWrap.classList.add("hidden");
-    return;
-  }
-
-  timerWrap.classList.remove("hidden");
+  // si no hay tiempo, no se pinta nada (la ocultación la hace startTimerForQuestion/resetTimerUI)
+  if (timeSecondsCurrent <= 0) return;
 
   const rem = remainingMs();
   const ratio = timerTotalMs > 0 ? rem / timerTotalMs : 0;
   const pct = Math.max(0, Math.min(100, Math.round(ratio * 100)));
 
   timerFill.style.width = pct + "%";
+
   const bar = timerFill.parentElement;
   if (bar) bar.setAttribute("aria-valuenow", String(pct));
 
@@ -214,28 +204,46 @@ function renderTimer() {
 }
 
 
-  function startTimerForQuestion() {
-    stopTimer();
 
-    if (timeSecondsCurrent <= 0) {
-      renderTimer();
-      return;
-    }
+function startTimerForQuestion() {
+  stopTimer();
 
-    timerTotalMs = timeSecondsCurrent * 1000;
-    timerEndTs = Date.now() + timerTotalMs;
-
-    renderTimer();
-
-    timerInterval = setInterval(() => {
-      const rem = remainingMs();
-      renderTimer();
-      if (rem <= 0) {
-        stopTimer();
-        onTimeUp();
-      }
-    }, 50);
+  // sin tiempo => ocultar y limpiar
+  if (timeSecondsCurrent <= 0) {
+    resetTimerUI();
+    return;
   }
+
+  if (!timerWrap || !timerFill || !timerText) return;
+
+  timerWrap.classList.remove("hidden");
+
+  timerTotalMs = timeSecondsCurrent * 1000;
+  timerEndTs = Date.now() + timerTotalMs;
+
+  renderTimer();
+
+  timerInterval = setInterval(() => {
+    const rem = remainingMs();
+    renderTimer();
+    if (rem <= 0) {
+      stopTimer();
+      onTimeUp();
+    }
+  }, 50);
+}
+
+
+
+function resetTimerUI() {
+  stopTimer();
+  timerTotalMs = 0;
+  timerEndTs = 0;
+
+  if (timerFill) timerFill.style.width = "100%";
+  if (timerText) timerText.textContent = "";
+  if (timerWrap) timerWrap.classList.add("hidden");
+}
 
   // -----------------------------
   // game state (by IDs!)
@@ -392,7 +400,7 @@ function renderTimer() {
   }
 
   function backToHome() {
-    stopTimer();
+    resetTimerUI();
     game = null;
     showScreen(screenStart);
   }
@@ -420,6 +428,7 @@ function renderTimer() {
 
     const selectedMode = getSelectedMode();
     timeSecondsCurrent = getSelectedTimeSeconds();
+    resetTimerUI();
     renderTimer();
 
     game = {
@@ -571,7 +580,7 @@ function renderTimer() {
   }
 
   function endGame() {
-    stopTimer();
+    resetTimerUI();
     showScreen(screenEnd);
     renderEndScreen();
   }
@@ -696,6 +705,13 @@ function renderTimer() {
 
   numQuestionsInput.addEventListener("input", normalizeNumQuestionsInput);
   numQuestionsInput.addEventListener("blur", normalizeNumQuestionsInput);
+
+
+  timeLimitSelect.addEventListener("change", () => {
+    // no estamos jugando: reflejamos el estado visual correcto (oculto si 0)
+    timeSecondsCurrent = getSelectedTimeSeconds();
+    resetTimerUI();
+  });
 
   // -----------------------------
   // Init
