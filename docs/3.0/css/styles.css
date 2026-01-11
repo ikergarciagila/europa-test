@@ -1,3 +1,5 @@
+:root { color-scheme: dark; }
+
 :root {
   --bg: #0b1020;
   --card: #121a33;
@@ -299,6 +301,17 @@ select{
   background: rgba(0,0,0,.15);
   color: var(--text);
   outline: none;
+  color-scheme: dark; /* importante */
+}
+
+select:focus{
+  border-color: rgba(42,60,255,.75);
+}
+
+/* En algunos navegadores ayuda a forzar los colores del menú */
+select option{
+  background: #121a33;
+  color: #e8ecff;
 }
 
 .smallNote{

@@ -7,7 +7,7 @@ window.I18N_ES = {
   labelNumQuestions: "Número de preguntas:",
   btnStart: "Empezar",
   btnViewList: "Ver listado",
-  startHint: "(De momento, esto es suficiente como “menú”. Más adelante metemos modos de juego.)",
+  startHint: "Elige una modalidad y pulsa Empezar. Puedes ajustar las opciones en Configuración.",
 
   btnQuit: "Salir",
 

@@ -7,7 +7,7 @@ window.I18N_CA = {
   labelNumQuestions: "Nombre de preguntes:",
   btnStart: "Començar",
   btnViewList: "Veure llistat",
-  startHint: "(De moment, això és suficient com a “menú”. Més endavant hi afegirem modes de joc.)",
+  startHint: "Tria una modalitat i prem Començar. Pots ajustar les opcions a Configuració.",
 
   btnQuit: "Sortir",
 

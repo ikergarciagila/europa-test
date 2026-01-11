@@ -184,28 +184,35 @@
     return Math.max(0, timerEndTs - Date.now());
   }
 
-  function renderTimer() {
-    if (!timerWrap || !timerFill || !timerText) return;
+function renderTimer() {
+  if (!timerWrap || !timerFill || !timerText) return;
 
-    if (timeSecondsCurrent <= 0) {
-      // sin tiempo: ocultamos
-      timerWrap.classList.add("hidden");
-      return;
-    }
-
-    timerWrap.classList.remove("hidden");
-
-    const rem = remainingMs();
-    const ratio = timerTotalMs > 0 ? rem / timerTotalMs : 0;
-    const pct = Math.max(0, Math.min(100, Math.round(ratio * 100)));
-
-    timerFill.style.width = pct + "%";
-    const bar = timerFill.parentElement;
-    if (bar) bar.setAttribute("aria-valuenow", String(pct));
-
-    const secs = Math.ceil(rem / 1000);
-    timerText.textContent = T.pillTimer(secs);
+  // Ocultar si no estamos jugando o no estamos en la pantalla del juego
+  if (!game || screenGame.classList.contains("hidden")) {
+    timerWrap.classList.add("hidden");
+    return;
   }
+
+  // Sin tiempo => oculto
+  if (timeSecondsCurrent <= 0) {
+    timerWrap.classList.add("hidden");
+    return;
+  }
+
+  timerWrap.classList.remove("hidden");
+
+  const rem = remainingMs();
+  const ratio = timerTotalMs > 0 ? rem / timerTotalMs : 0;
+  const pct = Math.max(0, Math.min(100, Math.round(ratio * 100)));
+
+  timerFill.style.width = pct + "%";
+  const bar = timerFill.parentElement;
+  if (bar) bar.setAttribute("aria-valuenow", String(pct));
+
+  const secs = Math.ceil(rem / 1000);
+  timerText.textContent = T.pillTimer(secs);
+}
+
 
   function startTimerForQuestion() {
     stopTimer();
@@ -351,6 +358,7 @@
     }
 
     timeLimitHelp.textContent = T.timeLimitHelp || "";
+    normalizeNumQuestionsInput();
   }
 
   // -----------------------------
@@ -412,6 +420,7 @@
 
     const selectedMode = getSelectedMode();
     timeSecondsCurrent = getSelectedTimeSeconds();
+    renderTimer();
 
     game = {
       mode: selectedMode,
@@ -657,6 +666,17 @@
     document.documentElement.lang = currentLang;
   }
 
+  function normalizeNumQuestionsInput() {
+    const max = Math.max(5, countriesList.length || 5);
+    let v = Number(numQuestionsInput.value);
+
+    if (!Number.isFinite(v)) v = 10;
+    v = Math.floor(v);
+    v = clamp(v, 5, max);
+
+    numQuestionsInput.value = String(v);
+}
+
   // -----------------------------
   // Events
   // -----------------------------
@@ -673,6 +693,9 @@
   langCa.addEventListener("click", () => setLang("ca"));
 
   btnToggleConfig.addEventListener("click", toggleConfigPanel);
+
+  numQuestionsInput.addEventListener("input", normalizeNumQuestionsInput);
+  numQuestionsInput.addEventListener("blur", normalizeNumQuestionsInput);
 
   // -----------------------------
   // Init
