@@ -174,8 +174,6 @@ tr:last-child td { border-bottom: 0; }
   font-weight: 650;
 }
 
-.hidden { display: none; }
-
 .timerWrap{
   display: flex;
   align-items: center;
@@ -320,3 +318,5 @@ select option{
   font-weight: 650;
   opacity: .95;
 }
+
+.hidden { display: none !important; }
