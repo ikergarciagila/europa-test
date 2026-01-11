@@ -67,7 +67,5 @@ window.I18N_CA = {
   feedbackTimeUpWithCorrectCapital: (correctCapital) => `⏱️ Temps esgotat! La correcta és: ${correctCapital}`,
   feedbackTimeUpWithCorrectCountry: (correctCountry) => `⏱️ Temps esgotat! La correcta és: ${correctCountry}`,
 
-
-
 };
 

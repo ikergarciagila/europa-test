@@ -67,8 +67,4 @@ window.I18N_ES = {
   feedbackTimeUpWithCorrectCapital: (correctCapital) => `⏱️ ¡Tiempo! La correcta es: ${correctCapital}`,
   feedbackTimeUpWithCorrectCountry: (correctCountry) => `⏱️ ¡Tiempo! La correcta es: ${correctCountry}`,
 
-
-
-
-
 };
